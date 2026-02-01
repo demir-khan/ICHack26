@@ -1,139 +1,141 @@
-// screens/MenuScreen.js
-import { useNavigation, useRoute } from '@react-navigation/native';
-import React, { useEffect, useState } from 'react';
-import {
-    Alert,
-    FlatList,
-    Image,
-    SafeAreaView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View
-} from 'react-native';
-import { useCart } from '../context/CartContext';
-import { fetchItemImage } from '../services/api'; // We use your Pexels function
+import { Ionicons } from '@expo/vector-icons';
+import { Audio } from 'expo-av'; // Audio Player
+import * as FileSystem from 'expo-file-system'; // To save audio file
+import { useEffect, useState } from 'react';
+import { ActivityIndicator, FlatList, SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { generateMenuStory } from '../services/api';
+import { COLORS, globalStyles } from '../styles/theme';
+import MenuItem from './MenuItem';
 
-// --- COMPONENT FOR SINGLE MENU CARD ---
-const MenuItemCard = ({ item }) => {
-  const { addToCart } = useCart();
-  const [imageUrl, setImageUrl] = useState(null);
+const MenuScreen = ({ menuItems = [] }) => {
+  const [basket, setBasket] = useState({});
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [audioLoading, setAudioLoading] = useState(false);
+  const [sound, setSound] = useState();
 
-  // Load Pexels image when this card appears
+  // Clean up sound on unmount
   useEffect(() => {
-    const loadImage = async () => {
-      const url = await fetchItemImage(item.name);
-      setImageUrl(url);
-    };
-    loadImage();
-  }, [item.name]);
+    return sound ? () => { sound.unloadAsync(); } : undefined;
+  }, [sound]);
 
-  const handleAdd = () => {
-    addToCart(item);
-    Alert.alert("Added", `${item.name} is in your basket.`);
+  // --- AUDIO LOGIC ---
+  const handlePlayNarration = async () => {
+    if (isPlaying) {
+      sound?.stopAsync();
+      setIsPlaying(false);
+      return;
+    }
+
+    setAudioLoading(true);
+    try {
+      // 1. Get Story Text
+      console.log("Generating Story...");
+      const storyText = await generateMenuStory(menuItems);
+      
+      // 2. Get Audio from ElevenLabs (Returns Blob/Buffer)
+      console.log("Fetching Audio...");
+      // NOTE: For React Native, passing Blob to Sound is hard. 
+      // Strategy: We will use the ElevenLabs API to return a DIRECT STREAM if possible, 
+      // or we use a temporary workaround for the hackathon by downloading the file.
+      
+      // -- HACKATHON SHORTCUT FOR AUDIO -- 
+      // Instead of the complex API.js blob logic, we will use the URI method directly here
+      // This is often more stable for Expo.
+      const VOICE_ID = 'pFZP5JQG7iQjIQuC4Bku';
+      // Assume you added ELEVEN_LABS_API_KEY to your env
+      const uri = `https://api.elevenlabs.io/v1/text-to-speech/${VOICE_ID}/stream`; // /stream endpoint
+      
+      // We download the stream to a local file
+      const fileUri = FileSystem.documentDirectory + 'narration.mp3';
+      const downloadRes = await FileSystem.downloadAsync(
+        uri,
+        fileUri,
+        {
+          headers: {
+            'xi-api-key': process.env.ELEVEN_LABS_API_KEY, // Access env directly or import it
+            'Content-Type': 'application/json',
+          },
+          httpMethod: 'POST',
+          body: JSON.stringify({
+             text: storyText,
+             model_id: "eleven_monolingual_v1"
+          })
+        }
+      );
+
+      // 3. Play the file
+      const { sound: newSound } = await Audio.Sound.createAsync({ uri: downloadRes.uri });
+      setSound(newSound);
+      await newSound.playAsync();
+      setIsPlaying(true);
+      
+      newSound.setOnPlaybackStatusUpdate((status) => {
+        if (status.didJustFinish) setIsPlaying(false);
+      });
+
+    } catch (error) {
+      console.error("Audio Failed:", error);
+      alert("Could not narrate menu.");
+    } finally {
+      setAudioLoading(false);
+    }
   };
 
   return (
-    <View style={styles.card}>
-      {/* Image Section */}
-      <Image 
-        source={{ uri: imageUrl || 'https://via.placeholder.com/150' }} 
-        style={styles.foodImage} 
-      />
-      
-      {/* Text Info */}
-      <View style={styles.infoContainer}>
-        <View style={styles.headerRow}>
-          <Text style={styles.itemName}>{item.name}</Text>
-          <Text style={styles.itemPrice}>£{item.price.toFixed(2)}</Text>
-        </View>
-        <Text style={styles.itemDescription} numberOfLines={2}>
-          {item.description}
-        </Text>
+    <SafeAreaView style={globalStyles.screenContainer}>
+      <View style={{ padding: 16, flex: 1 }}>
         
-        {/* Add Button */}
-        <TouchableOpacity style={styles.addButton} onPress={handleAdd}>
-          <Text style={styles.addButtonText}>Add to Basket</Text>
-        </TouchableOpacity>
+        {/* Header with Play Button */}
+        <View style={styles.headerRow}>
+          <Text style={globalStyles.h1}>Menulator</Text>
+          <TouchableOpacity 
+            style={styles.playButton} 
+            onPress={handlePlayNarration}
+            disabled={audioLoading}
+          >
+            {audioLoading ? (
+              <ActivityIndicator color="white" size="small" />
+            ) : (
+              <Ionicons name={isPlaying ? "stop" : "play"} size={20} color="white" />
+            )}
+            <Text style={styles.playText}>
+              {audioLoading ? " Loading..." : (isPlaying ? " Stop" : " Narrate")}
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Progress Bar (Fake or Real) */}
+        {audioLoading && (
+          <View style={{ height: 4, backgroundColor: '#E5E5EA', borderRadius: 2, marginBottom: 15 }}>
+            <View style={{ width: '50%', height: '100%', backgroundColor: COLORS.loading }} />
+          </View>
+        )}
+
+        {/* Menu List */}
+        <FlatList
+          data={menuItems}
+          keyExtractor={(item) => item.id}
+          renderItem={({ item }) => (
+            <MenuItem item={item} quantity={basket[item.id] || 0} onUpdateQuantity={() => {}} />
+          )}
+        />
       </View>
-    </View>
+    </SafeAreaView>
   );
 };
 
-// --- MAIN SCREEN ---
-export default function MenuScreen() {
-  const navigation = useNavigation();
-  const route = useRoute();
-  const { cart } = useCart();
-  const { menuItems } = route.params || {};
-
-  // Header Button to view Basket
-  React.useLayoutEffect(() => {
-    navigation.setOptions({
-      headerRight: () => (
-        <TouchableOpacity 
-          style={{ marginRight: 15 }} 
-          onPress={() => navigation.navigate('Cart')}
-        >
-          <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#007AFF' }}>
-            Basket ({cart.length})
-          </Text>
-        </TouchableOpacity>
-      ),
-    });
-  }, [navigation, cart]);
-
-  if (!menuItems || menuItems.length === 0) {
-    return (
-      <View style={styles.center}>
-        <Text>No items found.</Text>
-      </View>
-    );
-  }
-
-  return (
-    <SafeAreaView style={styles.container}>
-      <FlatList
-        data={menuItems}
-        keyExtractor={(item, index) => index.toString()}
-        renderItem={({ item }) => <MenuItemCard item={item} />}
-        contentContainerStyle={{ padding: 16, paddingBottom: 100 }}
-      />
-      
-      {/* Floating View Basket Button */}
-      {cart.length > 0 && (
-        <TouchableOpacity 
-          style={styles.floatingButton}
-          onPress={() => navigation.navigate('Cart')}
-        >
-          <Text style={styles.floatingButtonText}>View Basket ({cart.length})</Text>
-        </TouchableOpacity>
-      )}
-    </SafeAreaView>
-  );
-}
-
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F2F2F7' },
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  card: {
-    backgroundColor: '#fff', borderRadius: 16, marginBottom: 16, overflow: 'hidden',
-    shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 5, elevation: 3
+  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
+  playButton: {
+    flexDirection: 'row',
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    alignItems: 'center',
+    gap: 6
   },
-  foodImage: { width: '100%', height: 150 }, // Big preview image
-  infoContainer: { padding: 16 },
-  headerRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
-  itemName: { fontSize: 18, fontWeight: '700', flex: 1 },
-  itemPrice: { fontSize: 18, fontWeight: '700', color: '#007AFF' },
-  itemDescription: { fontSize: 14, color: '#666', marginBottom: 12 },
-  addButton: {
-    backgroundColor: '#007AFF', padding: 10, borderRadius: 8, alignItems: 'center'
-  },
-  addButtonText: { color: '#fff', fontWeight: '600' },
-  floatingButton: {
-    position: 'absolute', bottom: 30, left: 20, right: 20,
-    backgroundColor: '#34C759', padding: 16, borderRadius: 50, alignItems: 'center',
-    shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 5
-  },
-  floatingButtonText: { color: '#fff', fontSize: 18, fontWeight: 'bold' }
+  playText: { color: 'white', fontWeight: 'bold', fontSize: 14 }
 });
+
+export default MenuScreen;

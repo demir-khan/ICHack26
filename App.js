@@ -1,55 +1,83 @@
-// App.js
+import { Ionicons } from '@expo/vector-icons';
+import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { NavigationContainer } from '@react-navigation/native';
-import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { StatusBar } from 'expo-status-bar';
 
-// --- IMPORT SCREENS ---
-import CartScreen from './screens/CartScreen';
-import HomeScreen from './screens/HomeScreen';
-import LocalFoodScreen from './screens/LocalFoodScreen';
-import MenuScreen from './screens/MenuScreen';
+// Context
+import { FavoritesProvider } from './src/context/FavoritesContext';
 
-// --- IMPORT CONTEXT ---
-import { CartProvider } from './context/CartContext';
+// Screens
+import FavoritesScreen from './src/screens/FavoritesScreen'; // "Favorites"
+import LocalFoodScreen from './src/screens/LocalFoodScreen'; // "Find Food"
+import MenuScreen from './src/screens/MenuScreen'; // "Menulator" (Scanner)
 
-const Stack = createNativeStackNavigator();
+// Theme
+import { COLORS } from './src/styles/theme';
+
+const Tab = createBottomTabNavigator();
 
 export default function App() {
   return (
-    // 1. Wrap the whole app in CartProvider so the basket works everywhere
-    <CartProvider>
+    <FavoritesProvider>
       <NavigationContainer>
-        <Stack.Navigator initialRouteName="Home">
-          
-          {/* HOME SCREEN (Scanner & Main Menu) */}
-          <Stack.Screen 
-            name="Home" 
-            component={HomeScreen} 
-            options={{ headerShown: false }} 
-          />
+        {/* Status Bar: Dark text for Light Mode */}
+        <StatusBar style="dark" />
+        
+        <Tab.Navigator
+          screenOptions={({ route }) => ({
+            headerShown: false, // We use our own custom headers in screens
+            tabBarStyle: {
+              backgroundColor: COLORS.bg,
+              borderTopColor: COLORS.border,
+              height: 60,
+              paddingBottom: 8,
+              paddingTop: 8,
+            },
+            tabBarActiveTintColor: COLORS.primary, // Black (Modern)
+            tabBarInactiveTintColor: COLORS.textDim, // Grey
+            tabBarLabelStyle: {
+              fontSize: 12,
+              fontWeight: '600',
+            },
+            tabBarIcon: ({ focused, color, size }) => {
+              let iconName;
 
-          {/* MENU SCREEN (The Digitized Menu) */}
-          <Stack.Screen 
-            name="Menu" 
-            component={MenuScreen} 
-            options={{ title: 'Digitized Menu' }} 
-          />
+              if (route.name === 'Find Food') {
+                iconName = focused ? 'search' : 'search-outline';
+              } else if (route.name === 'Menulator') {
+                iconName = focused ? 'scan-circle' : 'scan-outline';
+              } else if (route.name === 'Favorites') {
+                iconName = focused ? 'heart' : 'heart-outline';
+              }
 
-          {/* CART SCREEN (Your Basket) */}
-          <Stack.Screen 
-            name="Cart" 
-            component={CartScreen} 
-            options={{ title: 'Your Basket' }} 
-          />
-
-          {/* LOCAL FOOD SCREEN (The New Golden Button Feature) */}
-          <Stack.Screen 
-            name="LocalFood" 
+              // Special "Big Icon" for the Scanner in the middle
+              if (route.name === 'Menulator') {
+                return <Ionicons name={iconName} size={32} color={color} />;
+              }
+              
+              return <Ionicons name={iconName} size={size} color={color} />;
+            },
+          })}
+        >
+          <Tab.Screen 
+            name="Find Food" 
             component={LocalFoodScreen} 
-            options={{ title: 'Find Authentic Food' }} 
+            options={{ title: 'Explore' }}
           />
-
-        </Stack.Navigator>
+          
+          <Tab.Screen 
+            name="Menulator" 
+            component={MenuScreen} 
+            options={{ title: 'Scan Menu' }}
+          />
+          
+          <Tab.Screen 
+            name="Favorites" 
+            component={FavoritesScreen} 
+            options={{ title: 'Saved' }}
+          />
+        </Tab.Navigator>
       </NavigationContainer>
-    </CartProvider>
+    </FavoritesProvider>
   );
 }

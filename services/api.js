@@ -1,4 +1,4 @@
-import { GOOGLE_API_KEY, OPENAI_API_KEY, PEXELS_API_KEY } from '@env';
+import { ELEVEN_LABS_API_KEY, GOOGLE_API_KEY, OPENAI_API_KEY, PEXELS_API_KEY } from '@env';
 
 // TOGGLE THIS TO 'true' IF YOU RUN OUT OF API CREDITS DURING THE DEMO
 const IS_MOCK_MODE = false; 
@@ -162,5 +162,77 @@ export const findLocalFood = async (preferences, location) => {
   } catch (error) {
     console.error("❌ Google Maps / API Error:", error);
     return MOCK_RESULTS; // Fallback to mock on crash
+  }
+};
+
+// ... existing imports ...
+
+
+// ... existing code (parseMenu, findLocalFood) ...
+
+// 1. Generate the Menu Story (OpenAI)
+export const generateMenuStory = async (menuItems) => {
+  if (!menuItems || menuItems.length === 0) return "This menu looks delicious.";
+
+  const itemsText = menuItems.map(i => i.name).join(", ");
+  
+  try {
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${OPENAI_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: "gpt-3.5-turbo", // Fast and cheap
+        messages: [
+          { 
+            role: "system", 
+            content: "You are a gourmet narrator. Write a 30-second, mouth-watering story describing these menu items as if you are a chef presenting them to a guest. Keep it under 100 words." 
+          },
+          { role: "user", content: `Menu items: ${itemsText}` }
+        ]
+      })
+    });
+    const data = await response.json();
+    return data.choices[0].message.content;
+  } catch (e) {
+    console.error("Story Gen Error:", e);
+    return "Welcome to Menulator. This food looks absolutely amazing. You should definitely try the specials.";
+  }
+};
+
+// 2. Turn Text to Audio (ElevenLabs)
+export const textToSpeech = async (text) => {
+  const VOICE_ID = 'pFZP5JQG7iQjIQuC4Bku'; // Your requested Voice ID
+  const API_KEY = ELEVEN_LABS_API_KEY; // Ensure this is in your .env
+
+  try {
+    const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${VOICE_ID}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'xi-api-key': API_KEY,
+      },
+      body: JSON.stringify({
+        text: text,
+        model_id: "eleven_monolingual_v1",
+        voice_settings: { stability: 0.5, similarity_boost: 0.5 }
+      })
+    });
+
+    if (!response.ok) throw new Error("ElevenLabs Error");
+
+    // Return the audio as a blob/buffer that expo-av can play
+    // Note: React Native handling of Blobs for audio can be tricky.
+    // Ideally, for a hackathon, we save it to a file, but let's try returning the Base64.
+    const blob = await response.blob();
+    return blob; 
+    
+    // ALTERNATIVE HACKATHON APPROACH (If Blobs fail):
+    // Just return the 'stream' URL if possible, or handle Base64 conversion in the screen.
+  } catch (e) {
+    console.error("TTS Error:", e);
+    return null;
   }
 };

@@ -1,43 +1,42 @@
-// src/styles/theme.js
 import { StyleSheet } from 'react-native';
 
 export const COLORS = {
-  bg: '#0B0F19',        // Deep, deep blue/black
-  card: '#151C2C',      // Slightly lighter for cards
-  primary: '#CCFF00',   // The "ForkCast" Neon Lime
-  text: '#FFFFFF',      // Pure white for headings
-  textDim: '#8F9BB3',   // Blue-grey for secondary text
-  border: '#2A364D',    // Subtle border color
-  success: '#00E096',   // Green for "Open Now"
+  bg: '#FFFFFF',           // Pure White Background
+  card: '#FFFFFF',         // White Cards
+  primary: '#000000',      // Black for primary actions (Modern/Luxury)
+  accent: '#FF4D4D',       // Red for Hearts/Favorites
+  text: '#1C1C1E',         // Dark Grey for reading
+  textDim: '#8E8E93',      // Light Grey for secondary info
+  border: '#E5E5EA',       // Very subtle borders
+  success: '#34C759',      // Green for "Open"
+  loading: '#007AFF',      // Blue for loading bars
 };
 
 export const globalStyles = StyleSheet.create({
-  // The Screen Wrapper
   screenContainer: {
     flex: 1,
     backgroundColor: COLORS.bg,
   },
-  // The "Glass" Card (Consistent Look)
   card: {
     backgroundColor: COLORS.card,
     borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+    // Soft, modern shadow (Elevation)
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
     borderWidth: 1,
     borderColor: COLORS.border,
-    padding: 12,
-    marginBottom: 16,
-    // Soft Shadow
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.2,
-    shadowRadius: 12,
-    elevation: 4,
   },
-  // Typography Hierarchy
   h1: {
-    fontSize: 28,
-    fontWeight: '800', // Extra Bold
+    fontSize: 32,
+    fontWeight: '800',
     color: COLORS.text,
     letterSpacing: -0.5,
+    marginBottom: 8,
   },
   h2: {
     fontSize: 18,
@@ -46,27 +45,25 @@ export const globalStyles = StyleSheet.create({
     marginBottom: 4,
   },
   body: {
-    fontSize: 14,
+    fontSize: 15,
     color: COLORS.textDim,
-    lineHeight: 20,
+    lineHeight: 22,
   },
-  // Buttons
+  // Modern Black Button
   primaryButton: {
     backgroundColor: COLORS.primary,
     borderRadius: 12,
     paddingVertical: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: COLORS.primary,
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
-    elevation: 8,
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowRadius: 5,
+    elevation: 4,
   },
   buttonText: {
-    color: '#000',
-    fontWeight: '900',
+    color: '#FFF',
+    fontWeight: '700',
     fontSize: 16,
-    letterSpacing: 1,
-    textTransform: 'uppercase',
   },
 });
