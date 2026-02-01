@@ -1,9 +1,10 @@
-import { ELEVEN_LABS_API_KEY, GOOGLE_API_KEY, OPENAI_API_KEY, PEXELS_API_KEY } from '@env';
+import { GOOGLE_API_KEY, OPENAI_API_KEY, PEXELS_API_KEY } from '@env';
 
-// TOGGLE THIS TO 'true' IF YOU RUN OUT OF API CREDITS DURING THE DEMO
+// --- CONFIGURATION ---
+// Set to TRUE if you want to force fake data (good for testing UI without using credits)
 const IS_MOCK_MODE = false; 
 
-// --- MOCK DATA (5 Robust Items for Demo Safety) ---
+// --- MOCK DATA (Fallbacks) ---
 const MOCK_RESULTS = [
   { place_id: '1', name: "Neon Burger", rating: 4.8, user_ratings_total: 320, vicinity: "123 Cyber Lane", photoUrl: null, distance: "0.2 km", travelTime: "5 mins", isOpen: true },
   { place_id: '2', name: "Tacos 2077", rating: 4.5, user_ratings_total: 150, vicinity: "45 Future St", photoUrl: null, distance: "0.5 km", travelTime: "10 mins", isOpen: true },
@@ -16,7 +17,7 @@ const MOCK_MENU = [
   { id: '1', name: 'System Error Burger', description: 'Could not connect to AI. Check internet.', price: 0.00 }
 ];
 
-// --- HELPER: FORMAT GOOGLE PHOTO URL ---
+// --- HELPER: GOOGLE PHOTO URL ---
 const getGooglePhotoUrl = (photoReference) => {
   if (!photoReference) return 'https://via.placeholder.com/400';
   return `https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photo_reference=${photoReference}&key=${GOOGLE_API_KEY}`;
@@ -28,7 +29,6 @@ const getGooglePhotoUrl = (photoReference) => {
 export const parseMenuFromImage = async (base64Image) => {
   console.log("📸 Starting Menu Scan...");
 
-  // Safety Check
   if (IS_MOCK_MODE) return MOCK_MENU;
   if (!OPENAI_API_KEY) {
     console.error("❌ ERROR: OPENAI_API_KEY is missing");
@@ -94,46 +94,33 @@ export const fetchItemImage = async (query) => {
 export const findLocalFood = async (preferences, location) => {
   console.log(`🔎 Finding food: "${preferences}" near "${location}"`);
 
-  if (IS_MOCK_MODE) {
-    return new Promise((resolve) => setTimeout(() => resolve(MOCK_RESULTS), 1000));
-  }
+  if (IS_MOCK_MODE) return MOCK_RESULTS;
 
   try {
-    // A. Ask GPT to convert "vibes" into a search query
-    // e.g. "Romantic spots" -> "Romantic dinner restaurants"
-    let searchQuery = preferences;
-    if (OPENAI_API_KEY) {
-      const gptResponse = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${OPENAI_API_KEY}` },
-        body: JSON.stringify({
-          model: "gpt-3.5-turbo",
-          messages: [
-            { role: "system", content: "Convert user food preferences into a concise Google Maps search query (e.g. 'Italian restaurants'). Return only the query string." },
-            { role: "user", content: preferences }
-          ]
-        })
-      });
-      const gptData = await gptResponse.json();
-      if (gptData.choices) {
-        searchQuery = gptData.choices[0].message.content.trim();
-      }
-    }
-    console.log(`🧠 AI Query: ${searchQuery}`);
+    // A. Clean Location Input (Remove spaces from coords "51.5,-0.1")
+    const cleanLoc = location.replace(/\s/g, '');
 
-    // B. Search Google Places (Text Search)
-    const placesUrl = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(searchQuery)} in ${encodeURIComponent(location)}&key=${GOOGLE_API_KEY}`;
+    // B. Search Google Places (Text Search with Radius)
+    // We use a 5km (5000m) radius to ensure results are local.
+    const radius = 5000;
+    const query = encodeURIComponent(preferences);
+    
+    const placesUrl = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${query}&location=${cleanLoc}&radius=${radius}&key=${GOOGLE_API_KEY}`;
+    
     const placesRes = await fetch(placesUrl);
     const placesData = await placesRes.json();
 
-    if (!placesData.results || placesData.results.length === 0) return [];
+    if (!placesData.results || placesData.results.length === 0) {
+      console.warn("⚠️ No results found nearby. Using Mock Data.");
+      return MOCK_RESULTS;
+    }
 
     // C. Slice Top 5 Results
     const top5Places = placesData.results.slice(0, 5);
 
     // D. Get Distances (Distance Matrix API)
     const destinations = top5Places.map(p => `place_id:${p.place_id}`).join('|');
-    const distanceUrl = `https://maps.googleapis.com/maps/api/distancematrix/json?origins=${encodeURIComponent(location)}&destinations=${destinations}&units=metric&key=${GOOGLE_API_KEY}`;
+    const distanceUrl = `https://maps.googleapis.com/maps/api/distancematrix/json?origins=${cleanLoc}&destinations=${destinations}&units=metric&key=${GOOGLE_API_KEY}`;
     
     const distRes = await fetch(distanceUrl);
     const distData = await distRes.json();
@@ -143,13 +130,13 @@ export const findLocalFood = async (preferences, location) => {
       const distanceInfo = distData.rows?.[0]?.elements?.[index];
       
       return {
-        id: place.place_id, // Important for keys
+        id: place.place_id,
         place_id: place.place_id,
         name: place.name,
         rating: place.rating || "New",
         reviewCount: place.user_ratings_total || 0,
         address: place.formatted_address,
-        vicinity: place.vicinity || place.formatted_address, // Shorter address
+        vicinity: place.vicinity || place.formatted_address, 
         photoUrl: place.photos ? getGooglePhotoUrl(place.photos[0].photo_reference) : null,
         distance: distanceInfo?.status === 'OK' ? distanceInfo.distance.text : 'Unknown',
         travelTime: distanceInfo?.status === 'OK' ? distanceInfo.duration.text : '',
@@ -165,12 +152,9 @@ export const findLocalFood = async (preferences, location) => {
   }
 };
 
-// ... existing imports ...
-
-
-// ... existing code (parseMenu, findLocalFood) ...
-
-// 1. Generate the Menu Story (OpenAI)
+// ======================================================
+// 4. STORY GENERATION (GPT-3.5)
+// ======================================================
 export const generateMenuStory = async (menuItems) => {
   if (!menuItems || menuItems.length === 0) return "This menu looks delicious.";
 
@@ -184,7 +168,7 @@ export const generateMenuStory = async (menuItems) => {
         'Authorization': `Bearer ${OPENAI_API_KEY}`,
       },
       body: JSON.stringify({
-        model: "gpt-3.5-turbo", // Fast and cheap
+        model: "gpt-3.5-turbo",
         messages: [
           { 
             role: "system", 
@@ -198,41 +182,17 @@ export const generateMenuStory = async (menuItems) => {
     return data.choices[0].message.content;
   } catch (e) {
     console.error("Story Gen Error:", e);
-    return "Welcome to Menulator. This food looks absolutely amazing. You should definitely try the specials.";
+    return "Welcome to Menulator. This food looks absolutely amazing.";
   }
 };
 
-// 2. Turn Text to Audio (ElevenLabs)
+// ======================================================
+// 5. TEXT TO SPEECH (ElevenLabs - Helper)
+// ======================================================
+// Note: We are using direct streaming in the UI for speed, 
+// but keeping this helper here in case you want to switch back later.
 export const textToSpeech = async (text) => {
-  const VOICE_ID = 'pFZP5JQG7iQjIQuC4Bku'; // Your requested Voice ID
-  const API_KEY = ELEVEN_LABS_API_KEY; // Ensure this is in your .env
-
-  try {
-    const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${VOICE_ID}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'xi-api-key': API_KEY,
-      },
-      body: JSON.stringify({
-        text: text,
-        model_id: "eleven_monolingual_v1",
-        voice_settings: { stability: 0.5, similarity_boost: 0.5 }
-      })
-    });
-
-    if (!response.ok) throw new Error("ElevenLabs Error");
-
-    // Return the audio as a blob/buffer that expo-av can play
-    // Note: React Native handling of Blobs for audio can be tricky.
-    // Ideally, for a hackathon, we save it to a file, but let's try returning the Base64.
-    const blob = await response.blob();
-    return blob; 
-    
-    // ALTERNATIVE HACKATHON APPROACH (If Blobs fail):
-    // Just return the 'stream' URL if possible, or handle Base64 conversion in the screen.
-  } catch (e) {
-    console.error("TTS Error:", e);
-    return null;
-  }
+  // Not used directly in UI currently (we use direct fetch there)
+  // but kept for reference or future cleanup.
+  return null; 
 };

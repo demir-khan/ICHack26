@@ -1,82 +1,62 @@
-import { Ionicons } from '@expo/vector-icons';
-import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { NavigationContainer } from '@react-navigation/native';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { StatusBar } from 'expo-status-bar';
 
 // Context
-import { FavoritesProvider } from './src/context/FavoritesContext';
+import { FavoritesProvider } from './context/FavoritesContext';
 
 // Screens
-import FavoritesScreen from './src/screens/FavoritesScreen'; // "Favorites"
-import LocalFoodScreen from './src/screens/LocalFoodScreen'; // "Find Food"
-import MenuScreen from './src/screens/MenuScreen'; // "Menulator" (Scanner)
+import FavoritesScreen from './screens/FavoritesScreen';
+import HomeScreen from './screens/HomeScreen';
+import LocalFoodScreen from './screens/LocalFoodScreen';
+import MenuScreen from './screens/MenuScreen';
 
 // Theme
-import { COLORS } from './src/styles/theme';
+import { COLORS } from './styles/theme';
 
-const Tab = createBottomTabNavigator();
+const Stack = createNativeStackNavigator();
 
 export default function App() {
   return (
     <FavoritesProvider>
       <NavigationContainer>
-        {/* Status Bar: Dark text for Light Mode */}
         <StatusBar style="dark" />
-        
-        <Tab.Navigator
-          screenOptions={({ route }) => ({
-            headerShown: false, // We use our own custom headers in screens
-            tabBarStyle: {
-              backgroundColor: COLORS.bg,
-              borderTopColor: COLORS.border,
-              height: 60,
-              paddingBottom: 8,
-              paddingTop: 8,
-            },
-            tabBarActiveTintColor: COLORS.primary, // Black (Modern)
-            tabBarInactiveTintColor: COLORS.textDim, // Grey
-            tabBarLabelStyle: {
-              fontSize: 12,
-              fontWeight: '600',
-            },
-            tabBarIcon: ({ focused, color, size }) => {
-              let iconName;
-
-              if (route.name === 'Find Food') {
-                iconName = focused ? 'search' : 'search-outline';
-              } else if (route.name === 'Menulator') {
-                iconName = focused ? 'scan-circle' : 'scan-outline';
-              } else if (route.name === 'Favorites') {
-                iconName = focused ? 'heart' : 'heart-outline';
-              }
-
-              // Special "Big Icon" for the Scanner in the middle
-              if (route.name === 'Menulator') {
-                return <Ionicons name={iconName} size={32} color={color} />;
-              }
-              
-              return <Ionicons name={iconName} size={size} color={color} />;
-            },
-          })}
+        <Stack.Navigator
+          screenOptions={{
+            headerStyle: { backgroundColor: COLORS.bg },
+            headerTintColor: COLORS.text,
+            headerTitleStyle: { fontWeight: '800', fontSize: 20 },
+            headerShadowVisible: false, // Clean, flat look
+            headerBackTitleVisible: false, // Just the arrow
+          }}
         >
-          <Tab.Screen 
+          {/* THE DASHBOARD */}
+          <Stack.Screen 
+            name="Home" 
+            component={HomeScreen} 
+            options={{ headerShown: false }} // Hide header for the "Splash" look
+          />
+
+          {/* OTHER SCREENS */}
+          <Stack.Screen 
             name="Find Food" 
             component={LocalFoodScreen} 
-            options={{ title: 'Explore' }}
+            options={{ title: 'Find Food' }}
           />
           
-          <Tab.Screen 
+          <Stack.Screen 
             name="Menulator" 
             component={MenuScreen} 
-            options={{ title: 'Scan Menu' }}
+            options={{ title: 'Scanner' }}
           />
           
-          <Tab.Screen 
+          <Stack.Screen 
             name="Favorites" 
             component={FavoritesScreen} 
-            options={{ title: 'Saved' }}
+            options={{ title: 'Favourites' }}
           />
-        </Tab.Navigator>
+
+        </Stack.Navigator>
       </NavigationContainer>
     </FavoritesProvider>
   );

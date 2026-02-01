@@ -1,86 +1,103 @@
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { triggerHaptic } from '../services/haptics'; // Ensure you created this service from the previous step
-import { COLORS, globalStyles } from '../styles/theme';
+import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
+import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { COLORS } from '../styles/theme';
 
 const MenuItem = ({ item, quantity, onUpdateQuantity }) => {
   
   const handleInc = () => {
-    triggerHaptic('light');
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     onUpdateQuantity(item.id, 1);
   };
 
   const handleDec = () => {
-    triggerHaptic('light');
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     onUpdateQuantity(item.id, -1);
   };
 
   return (
-    <View style={[globalStyles.forkCard, styles.container]}>
-      
-      {/* Text Info */}
-      <View style={{ flex: 1, paddingRight: 10 }}>
-        <Text style={[globalStyles.headerText, { fontSize: 18 }]}>{item.name}</Text>
-        <Text style={[globalStyles.subText, { fontSize: 12, marginBottom: 8 }]}>
-          {item.description || "Freshly prepared for you."}
+    <View style={styles.card}>
+      {/* 1. FOOD IMAGE (Restored) */}
+      <View style={styles.imageContainer}>
+        <Image 
+          source={{ uri: item.image || 'https://via.placeholder.com/150' }} 
+          style={styles.image} 
+          resizeMode="cover"
+        />
+      </View>
+
+      {/* 2. TEXT INFO */}
+      <View style={styles.infoContainer}>
+        <Text style={styles.name} numberOfLines={2}>{item.name}</Text>
+        <Text style={styles.desc} numberOfLines={2}>
+          {item.description || "Deliciously prepared."}
         </Text>
-        <Text style={{ color: COLORS.neon, fontWeight: 'bold', fontSize: 16 }}>
-          £{item.price ? item.price.toFixed(2) : '0.00'}
+        <Text style={styles.price}>
+          {item.price > 0 ? `£${item.price.toFixed(2)}` : ''}
         </Text>
       </View>
 
-      {/* Quantity Selector */}
+      {/* 3. AMAZON QUANTITY SELECTOR */}
       <View style={styles.actionContainer}>
         {quantity === 0 ? (
-          <TouchableOpacity 
-            style={styles.addButton} 
-            onPress={handleInc}
-          >
-            <Text style={styles.addButtonText}>ADD</Text>
+          <TouchableOpacity style={styles.addButton} onPress={handleInc}>
+            <Ionicons name="add" size={20} color="white" />
           </TouchableOpacity>
         ) : (
           <View style={styles.qtyWrapper}>
             <TouchableOpacity onPress={handleDec} style={styles.qtyBtn}>
-              <Text style={styles.qtyBtnText}>-</Text>
+              <Text style={styles.qtyText}>-</Text>
             </TouchableOpacity>
             
-            <Text style={styles.qtyText}>{quantity}</Text>
+            <Text style={styles.qtyVal}>{quantity}</Text>
             
             <TouchableOpacity onPress={handleInc} style={styles.qtyBtn}>
-              <Text style={styles.qtyBtnText}>+</Text>
+              <Text style={styles.qtyText}>+</Text>
             </TouchableOpacity>
           </View>
         )}
       </View>
-
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12 },
-  actionContainer: { alignItems: 'center', justifyContent: 'center' },
-  addButton: {
-    backgroundColor: '#fff',
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 20,
-  },
-  addButtonText: { color: '#000', fontWeight: 'bold', fontSize: 12 },
-  qtyWrapper: {
+  card: {
     flexDirection: 'row',
+    backgroundColor: 'white',
+    borderRadius: 12,
+    marginBottom: 12,
+    padding: 10,
     alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    borderRadius: 20,
-    padding: 2,
+    // Shadow
+    shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 5, elevation: 2,
+    borderWidth: 1, borderColor: '#F2F2F7',
+  },
+  imageContainer: {
+    width: 70, height: 70, borderRadius: 8, overflow: 'hidden', marginRight: 12,
+    backgroundColor: '#F2F2F7',
+  },
+  image: { width: '100%', height: '100%' },
+  infoContainer: { flex: 1, marginRight: 8 },
+  name: { fontWeight: '700', fontSize: 15, color: COLORS.text, marginBottom: 2 },
+  desc: { fontSize: 12, color: COLORS.textDim, marginBottom: 4 },
+  price: { fontWeight: '800', fontSize: 14, color: COLORS.text },
+  
+  actionContainer: { alignItems: 'flex-end', justifyContent: 'center' },
+  addButton: {
+    backgroundColor: COLORS.primary, // Black
+    width: 36, height: 36, borderRadius: 18,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  qtyWrapper: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: '#F2F2F7', borderRadius: 20, padding: 2
   },
   qtyBtn: {
-    width: 32,
-    height: 32,
-    alignItems: 'center',
-    justifyContent: 'center',
+    width: 28, height: 28, alignItems: 'center', justifyContent: 'center',
   },
-  qtyBtnText: { color: '#fff', fontSize: 18, fontWeight: 'bold' },
-  qtyText: { color: COLORS.neon, fontSize: 16, fontWeight: 'bold', marginHorizontal: 4 }
+  qtyText: { fontSize: 18, fontWeight: 'bold', color: COLORS.text },
+  qtyVal: { fontSize: 14, fontWeight: 'bold', marginHorizontal: 4, minWidth: 14, textAlign: 'center' },
 });
 
 export default MenuItem;
