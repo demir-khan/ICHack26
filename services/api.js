@@ -1,43 +1,41 @@
-// services/api.js
-import { OPENAI_API_KEY, PEXELS_API_KEY } from '@env';
+import { GOOGLE_API_KEY, OPENAI_API_KEY, PEXELS_API_KEY } from '@env';
 
+// TOGGLE THIS TO 'true' IF YOU RUN OUT OF API CREDITS DURING THE DEMO
 const IS_MOCK_MODE = false; 
 
-const MOCK_MENU = [
-  { id: '1', name: 'Network Error Burger', description: 'Could not connect to AI.', price: 0.00 }
+// --- MOCK DATA (5 Robust Items for Demo Safety) ---
+const MOCK_RESULTS = [
+  { place_id: '1', name: "Neon Burger", rating: 4.8, user_ratings_total: 320, vicinity: "123 Cyber Lane", photoUrl: null, distance: "0.2 km", travelTime: "5 mins", isOpen: true },
+  { place_id: '2', name: "Tacos 2077", rating: 4.5, user_ratings_total: 150, vicinity: "45 Future St", photoUrl: null, distance: "0.5 km", travelTime: "10 mins", isOpen: true },
+  { place_id: '3', name: "Pizza Glitch", rating: 4.2, user_ratings_total: 89, vicinity: "8-bit Avenue", photoUrl: null, distance: "1.2 km", travelTime: "18 mins", isOpen: false },
+  { place_id: '4', name: "Quantum Sushi", rating: 4.9, user_ratings_total: 500, vicinity: "Mainframe Blvd", photoUrl: null, distance: "2.1 km", travelTime: "25 mins", isOpen: true },
+  { place_id: '5', name: "Binary Bagels", rating: 4.0, user_ratings_total: 42, vicinity: "Coder's Alley", photoUrl: null, distance: "3.0 km", travelTime: "35 mins", isOpen: true },
 ];
 
+const MOCK_MENU = [
+  { id: '1', name: 'System Error Burger', description: 'Could not connect to AI. Check internet.', price: 0.00 }
+];
+
+// --- HELPER: FORMAT GOOGLE PHOTO URL ---
+const getGooglePhotoUrl = (photoReference) => {
+  if (!photoReference) return 'https://via.placeholder.com/400';
+  return `https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photo_reference=${photoReference}&key=${GOOGLE_API_KEY}`;
+};
+
+// ======================================================
+// 1. MENU PARSING (GPT-4o Vision)
+// ======================================================
 export const parseMenuFromImage = async (base64Image) => {
-  console.log("🚑 Starting Network Doctor...");
+  console.log("📸 Starting Menu Scan...");
 
-  // 1. TEST INTERNET CONNECTION
-  try {
-    console.log("1️⃣ Testing Internet...");
-    const googleTest = await fetch('https://www.google.com');
-    if (googleTest.ok) {
-        console.log("✅ Internet is WORKING.");
-    } else {
-        throw new Error("Internet is down");
-    }
-  } catch (e) {
-    console.error("❌ CRITICAL FAILURE: Your Simulator has NO INTERNET.", e);
-    return MOCK_MENU;
-  }
-
-  // 2. CHECK KEY
-  console.log("2️⃣ Checking Key...");
-  if (!OPENAI_API_KEY) {
-    console.error("❌ ERROR: OPENAI_API_KEY is missing from .env");
-    return MOCK_MENU;
-  }
-  console.log("✅ Key found.");
-
-  // 3. SEND REQUEST (With extra safety)
+  // Safety Check
   if (IS_MOCK_MODE) return MOCK_MENU;
+  if (!OPENAI_API_KEY) {
+    console.error("❌ ERROR: OPENAI_API_KEY is missing");
+    return MOCK_MENU;
+  }
 
   try {
-    console.log("3️⃣ Sending Image to OpenAI...");
-    
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -54,15 +52,8 @@ export const parseMenuFromImage = async (base64Image) => {
           {
             role: "user",
             content: [
-              { type: "text", text: "Parse this menu." },
-              { 
-                type: "image_url", 
-                image_url: { 
-                  // Use 'low' detail to save massive bandwidth
-                  url: `data:image/jpeg;base64,${base64Image}`,
-                  detail: "low" 
-                } 
-              }
+              { type: "text", text: "Parse this menu text." },
+              { type: "image_url", image_url: { url: `data:image/jpeg;base64,${base64Image}`, detail: "low" } }
             ]
           }
         ],
@@ -71,21 +62,19 @@ export const parseMenuFromImage = async (base64Image) => {
     });
 
     const data = await response.json();
-    if (!response.ok) {
-      console.error("❌ OpenAI API Refused:", data);
-      return MOCK_MENU;
-    }
+    if (!response.ok) throw new Error(JSON.stringify(data));
 
-    console.log("✅ SUCCESS: Data received!");
     const parsedData = JSON.parse(data.choices[0].message.content);
     return parsedData.items || [];
-
   } catch (error) {
-    console.error("❌ NETWORK REQUEST FAILED:", error);
+    console.error("❌ MENU PARSE FAILED:", error);
     return MOCK_MENU;
   }
 };
 
+// ======================================================
+// 2. IMAGE FETCHING (Pexels)
+// ======================================================
 export const fetchItemImage = async (query) => {
   try {
     const response = await fetch(
@@ -99,46 +88,79 @@ export const fetchItemImage = async (query) => {
   }
 };
 
-
-// location
-
+// ======================================================
+// 3. RESTAURANT FINDER (GPT + Google Maps)
+// ======================================================
 export const findLocalFood = async (preferences, location) => {
+  console.log(`🔎 Finding food: "${preferences}" near "${location}"`);
+
   if (IS_MOCK_MODE) {
-    return new Promise((resolve) => setTimeout(() => resolve([
-      { name: "Mock Burger Joint", address: "123 Main St", cuisine: "American", description: "Best burgers in town." },
-      { name: "Fake Pizza Place", address: "456 High St", cuisine: "Italian", description: "Authentic wood-fired pizza." }
-    ]), 1500));
+    return new Promise((resolve) => setTimeout(() => resolve(MOCK_RESULTS), 1000));
   }
 
   try {
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${OPENAI_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: "gpt-4o",
-        messages: [
-          {
-            role: "system",
-            content: "You are a local food guide. Suggest 5 REAL, existing restaurants based on the user's location and preferences. Return a strict JSON object with a key 'recommendations' containing an array. Each item must have: 'name', 'cuisine', 'description' (short), and 'address' (approximate is fine). Do not include intro text."
-          },
-          {
-            role: "user",
-            content: `Location: ${location}. Preferences: ${preferences}. Find 5 places.`
-          }
-        ],
-        response_format: { type: "json_object" }
-      })
+    // A. Ask GPT to convert "vibes" into a search query
+    // e.g. "Romantic spots" -> "Romantic dinner restaurants"
+    let searchQuery = preferences;
+    if (OPENAI_API_KEY) {
+      const gptResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${OPENAI_API_KEY}` },
+        body: JSON.stringify({
+          model: "gpt-3.5-turbo",
+          messages: [
+            { role: "system", content: "Convert user food preferences into a concise Google Maps search query (e.g. 'Italian restaurants'). Return only the query string." },
+            { role: "user", content: preferences }
+          ]
+        })
+      });
+      const gptData = await gptResponse.json();
+      if (gptData.choices) {
+        searchQuery = gptData.choices[0].message.content.trim();
+      }
+    }
+    console.log(`🧠 AI Query: ${searchQuery}`);
+
+    // B. Search Google Places (Text Search)
+    const placesUrl = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(searchQuery)} in ${encodeURIComponent(location)}&key=${GOOGLE_API_KEY}`;
+    const placesRes = await fetch(placesUrl);
+    const placesData = await placesRes.json();
+
+    if (!placesData.results || placesData.results.length === 0) return [];
+
+    // C. Slice Top 5 Results
+    const top5Places = placesData.results.slice(0, 5);
+
+    // D. Get Distances (Distance Matrix API)
+    const destinations = top5Places.map(p => `place_id:${p.place_id}`).join('|');
+    const distanceUrl = `https://maps.googleapis.com/maps/api/distancematrix/json?origins=${encodeURIComponent(location)}&destinations=${destinations}&units=metric&key=${GOOGLE_API_KEY}`;
+    
+    const distRes = await fetch(distanceUrl);
+    const distData = await distRes.json();
+
+    // E. Merge Data
+    const enrichedResults = top5Places.map((place, index) => {
+      const distanceInfo = distData.rows?.[0]?.elements?.[index];
+      
+      return {
+        id: place.place_id, // Important for keys
+        place_id: place.place_id,
+        name: place.name,
+        rating: place.rating || "New",
+        reviewCount: place.user_ratings_total || 0,
+        address: place.formatted_address,
+        vicinity: place.vicinity || place.formatted_address, // Shorter address
+        photoUrl: place.photos ? getGooglePhotoUrl(place.photos[0].photo_reference) : null,
+        distance: distanceInfo?.status === 'OK' ? distanceInfo.distance.text : 'Unknown',
+        travelTime: distanceInfo?.status === 'OK' ? distanceInfo.duration.text : '',
+        isOpen: place.opening_hours?.open_now,
+      };
     });
 
-    const data = await response.json();
-    const parsedData = JSON.parse(data.choices[0].message.content);
-    return parsedData.recommendations || [];
+    return enrichedResults;
 
   } catch (error) {
-    console.error("Local Food Error:", error);
-    return [];
+    console.error("❌ Google Maps / API Error:", error);
+    return MOCK_RESULTS; // Fallback to mock on crash
   }
 };
